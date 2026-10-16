@@ -1,0 +1,33 @@
+{
+  "name": "ferreteria-los-maestros-react",
+  "private": true,
+  "version": "2.0.0",
+  "description": "Ferretería Los Maestros - Evaluación Parcial 2 (DSY1104): frontend en React + Vite + React Bootstrap con pruebas unitarias en Vitest.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "bootstrap": "^5.3.8",
+    "react": "^19.3.1",
+    "react-bootstrap": "^2.10.10",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.4"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
+    "@vitejs/plugin-react": "^6.1.2",
+    "@vitest/coverage-v8": "^5.0.5",
+    "jsdom": "^29.1.1",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
+  }
+}
