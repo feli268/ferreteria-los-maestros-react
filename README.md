@@ -114,3 +114,9 @@ git checkout -b feature/mi-funcionalidad
 git add . && git commit -m "feat: descripción corta"
 git push -u origin feature/mi-funcionalidad     # y abrir el Pull Request en GitHub
 ```
+
+## Integrantes
+
+* Felipe Cortés
+* Dario Sagredo
+* Eduardo Contreras
