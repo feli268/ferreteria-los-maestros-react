@@ -54,7 +54,7 @@ export const DELIVERY_OPTIONS = [
 export const PAYMENT_METHODS = [
   { id: 'tarjeta', label: 'Tarjeta de crédito / débito' },
   { id: 'transferencia', label: 'Transferencia bancaria' },
-  // Solo para demostración: permite ver la vista "No se pudo realizar el pago".
+  // Solo para demostración: permite ver la vista "No se pudo realizar el pago.".
   { id: 'tarjeta-rechazada', label: 'Tarjeta de prueba RECHAZADA (simulación)' },
 ]
 
