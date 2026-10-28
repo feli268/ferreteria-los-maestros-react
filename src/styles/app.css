@@ -1,0 +1,227 @@
+/* Tema de Ferretería Los Maestros sobre Bootstrap 5.
+   Paleta de la entrega 1: azul petróleo (#1a2a3a) y naranja (#e67e22). */
+:root {
+  --lm-primary: #1a2a3a;
+  --lm-primary-dark: #121c27;
+  --lm-accent: #e67e22;
+  --lm-accent-hover: #d35400;
+  --lm-bg: #f5f7fa;
+
+  --bs-primary: #e67e22;
+  --bs-primary-rgb: 230, 126, 34;
+  --bs-link-color: #c0600f;
+  --bs-link-color-rgb: 192, 96, 15;
+  --bs-link-hover-color: #d35400;
+  --bs-body-bg: var(--lm-bg);
+  --bs-body-color: #2c3e50;
+  --bs-border-radius: 0.5rem;
+}
+
+body {
+  background-color: var(--lm-bg);
+}
+
+/* Botones principales y de contorno en naranja */
+.btn-primary {
+  --bs-btn-bg: var(--lm-accent);
+  --bs-btn-border-color: var(--lm-accent);
+  --bs-btn-color: #fff;
+  --bs-btn-hover-bg: var(--lm-accent-hover);
+  --bs-btn-hover-border-color: var(--lm-accent-hover);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-bg: var(--lm-accent-hover);
+  --bs-btn-active-border-color: var(--lm-accent-hover);
+  --bs-btn-disabled-bg: var(--lm-accent);
+  --bs-btn-disabled-border-color: var(--lm-accent);
+  --bs-btn-focus-shadow-rgb: 230, 126, 34;
+}
+.btn-outline-primary {
+  --bs-btn-color: #b8590d;
+  --bs-btn-border-color: var(--lm-accent);
+  --bs-btn-hover-bg: var(--lm-accent);
+  --bs-btn-hover-border-color: var(--lm-accent);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-bg: var(--lm-accent-hover);
+  --bs-btn-active-border-color: var(--lm-accent-hover);
+  --bs-btn-active-color: #fff;
+  --bs-btn-focus-shadow-rgb: 230, 126, 34;
+}
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--lm-accent);
+  box-shadow: 0 0 0 0.25rem rgba(230, 126, 34, 0.25);
+}
+.form-check-input:checked {
+  background-color: var(--lm-accent);
+  border-color: var(--lm-accent);
+}
+.nav-pills {
+  --bs-nav-pills-link-active-bg: var(--lm-accent);
+}
+
+/* Cabecera */
+.lm-navbar {
+  background-color: var(--lm-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+.lm-navbar .nav-link.active {
+  color: var(--lm-accent) !important;
+  font-weight: 600;
+}
+.lm-navbar .navbar-brand {
+  font-size: 1rem;
+  margin-right: 0.5rem;
+}
+@media (min-width: 576px) {
+  .lm-navbar .navbar-brand {
+    font-size: 1.25rem;
+  }
+}
+.lm-subbar {
+  background-color: var(--lm-primary-dark);
+}
+.lm-header-search {
+  max-width: 640px;
+}
+
+/* Pie de página */
+.lm-footer {
+  background-color: var(--lm-primary-dark);
+  color: #b9c4cf;
+}
+.lm-footer a {
+  color: #dfe6ec;
+  text-decoration: none;
+}
+.lm-footer a:hover {
+  color: var(--lm-accent);
+}
+
+/* Enlace "saltar al contenido" (accesibilidad) */
+.lm-skip-link {
+  position: absolute;
+  z-index: 3000;
+  background: #fff;
+  padding: 0.5rem 1rem;
+}
+
+/* Portada */
+.lm-hero-slide {
+  min-height: 260px;
+  padding: 1.5rem 3rem 2.5rem;
+  color: #fff;
+  background: linear-gradient(120deg, var(--lm-primary), #2c4a66);
+}
+.lm-hero-text {
+  max-width: 560px;
+}
+@media (min-width: 768px) {
+  .lm-hero-slide {
+    min-height: 300px;
+    padding: 2.5rem 3.5rem;
+  }
+}
+.lm-hero .carousel-indicators {
+  margin-bottom: 0.5rem;
+}
+
+/* Tarjetas de producto */
+.lm-product-card,
+.lm-category-card,
+.lm-stat-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.lm-product-card:hover,
+.lm-category-card:hover,
+a.lm-stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+.lm-product-img {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 130px;
+  background: #eef2f6;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+.lm-detail-img {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+  background: #fff;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+}
+.lm-stat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+}
+
+/* Carrito / pago: el resumen queda visible al hacer scroll en pantallas grandes */
+@media (min-width: 992px) {
+  .lm-sticky-summary {
+    position: sticky;
+    top: 90px;
+  }
+}
+
+/* Panel de administración */
+.lm-admin-sidebar {
+  background-color: var(--lm-primary);
+}
+@media (min-width: 992px) {
+  .lm-admin-side-col {
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    min-height: 100vh;
+    background-color: var(--lm-primary);
+  }
+  .lm-admin-sidebar .nav-link {
+    color: #d5dde5;
+  }
+}
+.lm-admin-sidebar .nav-link {
+  color: #d5dde5;
+}
+.lm-admin-sidebar .nav-link:hover {
+  color: #fff;
+}
+.lm-data-table th {
+  white-space: nowrap;
+}
+
+/* Impresión de la boleta: solo se imprime la boleta, sin menús ni botones */
+@media print {
+  .lm-navbar,
+  .lm-footer,
+  .lm-no-print,
+  .lm-admin-side-col,
+  .lm-skip-link,
+  .toast-container,
+  .btn {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  .lm-receipt {
+    border: none !important;
+  }
+}
+
+/* Titulares del carrusel: más compactos en móvil */
+.lm-hero-title {
+  font-size: 1.6rem;
+}
+@media (min-width: 768px) {
+  .lm-hero-title {
+    font-size: 2.25rem;
+  }
+}
