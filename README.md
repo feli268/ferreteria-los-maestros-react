@@ -112,11 +112,11 @@ git init && git branch -M main
 git remote add origin <URL-del-repositorio>
 git checkout -b feature/mi-funcionalidad
 git add . && git commit -m "feat: descripción corta"
-git push -u origin feature/mi-funcionalidad     # y abrir el Pull Request en GitHub
+git push -u origin feature/mi-funcionalidad    
 ```
 
 ## Integrantes
 
 * Felipe Cortés
-* Dario Sagredo
+* Darío Sagredo
 * Eduardo Contreras
