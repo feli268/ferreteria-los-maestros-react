@@ -6,3 +6,5 @@ coverage
 .idea
 .vscode
 demo-errores/
+.env
+.env.local
