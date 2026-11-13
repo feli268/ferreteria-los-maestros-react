@@ -27,7 +27,7 @@ export const ROLES = {
 
 export const roleOptions = [
   { value: ROLES.ADMIN, label: 'Administrador (acceso total)' },
-  { value: ROLES.SELLER, label: 'Vendedor (inventario y pedidos)' },
+  { value: ROLES.SELLER, label: 'Vendedor (consulta de productos y órdenes)' },
   { value: ROLES.CLIENT, label: 'Cliente / Contratista (solo tienda)' },
 ]
 

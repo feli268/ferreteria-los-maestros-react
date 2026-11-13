@@ -4,7 +4,8 @@ import { NavLink } from 'react-router-dom'
 import ActionButton from '../atoms/ActionButton'
 import Icon from '../atoms/Icon'
 
-export default function AdminSidebar({ items, user, onLogout }) {
+/** showStoreLink: enlace a la tienda (el Vendedor no lo ve: su vista solo tiene productos y órdenes). */
+export default function AdminSidebar({ items, user, onLogout, showStoreLink = true }) {
   return (
     <aside className="lm-admin-sidebar p-3" aria-label="Menú de administración">
       <div className="text-white mb-3 d-none d-lg-block">
@@ -17,9 +18,11 @@ export default function AdminSidebar({ items, user, onLogout }) {
             <Icon symbol={item.icon} size="1rem" /> {item.label}
           </Nav.Link>
         ))}
-        <Nav.Link as={NavLink} to="/" className="text-nowrap" end>
-          <Icon symbol="🏪" size="1rem" /> Tienda
-        </Nav.Link>
+        {showStoreLink && (
+          <Nav.Link as={NavLink} to="/" className="text-nowrap" end>
+            <Icon symbol="🏪" size="1rem" /> Tienda
+          </Nav.Link>
+        )}
       </Nav>
       <ActionButton variant="outline-light" size="sm" className="mt-3 w-100" onClick={onLogout}>
         Cerrar sesión

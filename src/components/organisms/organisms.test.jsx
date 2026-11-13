@@ -420,6 +420,15 @@ describe('AdminSidebar, SalesReport y ToastHost', () => {
     expect(onLogout).toHaveBeenCalled()
   })
 
+  it('AdminSidebar muestra el enlace a la Tienda, salvo que se indique lo contrario (Vendedor)', () => {
+    const items = [{ to: '/admin/productos', label: 'Productos', icon: '📦' }]
+    const { unmount } = renderWithRouter(<AdminSidebar items={items} user={initialUsers[0]} onLogout={() => {}} />, { route: '/admin/productos' })
+    expect(screen.getByRole('link', { name: /Tienda/ })).toHaveAttribute('href', '/')
+    unmount()
+    renderWithRouter(<AdminSidebar items={items} user={initialUsers[1]} onLogout={() => {}} showStoreLink={false} />, { route: '/admin/productos' })
+    expect(screen.queryByRole('link', { name: /Tienda/ })).toBeNull()
+  })
+
   it('SalesReport muestra las cifras y las dos tablas', () => {
     render(
       <SalesReport

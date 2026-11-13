@@ -35,7 +35,9 @@ export function AdminProductsContainer({ mode = 'all' }) {
       subtitle={
         mode === 'critical'
           ? 'Su stock es igual o menor al nivel crítico definido. Conviene reponerlos.'
-          : 'Inventario de la tienda: crea, edita o elimina productos.'
+          : can('products-manage')
+            ? 'Inventario de la tienda: crea, edita o elimina productos.'
+            : 'Consulta el inventario de la tienda.'
       }
       products={visibles}
       categories={categories}

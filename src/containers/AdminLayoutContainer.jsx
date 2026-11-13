@@ -7,6 +7,7 @@ import AdminLayout from '../components/templates/AdminLayout'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { ADMIN_MENU } from '../data/adminMenu'
+import { ROLES } from '../data/catalogs'
 import DataGateContainer from './DataGateContainer'
 
 export default function AdminLayoutContainer() {
@@ -39,6 +40,7 @@ export default function AdminLayoutContainer() {
       sidebar={
         <AdminSidebar
           user={user}
+          showStoreLink={user.role !== ROLES.SELLER}
           items={ADMIN_MENU.filter((item) => can(item.area))}
           onLogout={() => {
             cerrandoSesion.current = true

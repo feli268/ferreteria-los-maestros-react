@@ -49,7 +49,7 @@ describe('Control de acceso al panel', () => {
     const menu = screen.getByRole('complementary', { name: 'Menú de administración' })
     expect(within(menu).getByRole('link', { name: /Órdenes/ })).toBeInTheDocument()
     expect(within(menu).getByRole('link', { name: /Productos/ })).toBeInTheDocument()
-    for (const nombre of ['Dashboard', 'Categorías', 'Usuarios', 'Reportes', 'Mi perfil']) {
+    for (const nombre of ['Dashboard', 'Categorías', 'Usuarios', 'Reportes', 'Mi perfil', 'Tienda']) {
       expect(within(menu).queryByRole('link', { name: new RegExp(nombre) })).toBeNull()
     }
     expect(screen.getByText('Acceso restringido')).toBeInTheDocument()
@@ -239,6 +239,7 @@ describe('Productos (CRUD)', () => {
     const usuario = userEvent.setup()
     abrirComo('vendedor', '/admin/productos')
     expect(screen.getAllByRole('row')).toHaveLength(18)
+    expect(screen.getByText('Consulta el inventario de la tienda.')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '+ Nuevo producto' })).toBeNull()
     expect(screen.queryByRole('link', { name: /^Editar / })).toBeNull()
     expect(screen.queryByRole('button', { name: /^Eliminar / })).toBeNull()
