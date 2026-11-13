@@ -29,6 +29,7 @@ export function resetFakeBackend() {
     orders: clonar(initialOrders),
     calls: [],
     offline: false, // true = simula que el servidor no responde
+    latenciaMs: 0, // > 0 = cada respuesta tarda ese tiempo (sirve para probar estados de carga)
   }
 }
 resetFakeBackend()
@@ -313,6 +314,7 @@ function atender(method, ruta, body, usuario) {
 export async function fakeFetch(url, opciones = {}) {
   const { method = 'GET', headers = {}, body } = opciones
   if (db.offline) throw new TypeError('Failed to fetch')
+  if (db.latenciaMs > 0) await new Promise((resolver) => setTimeout(resolver, db.latenciaMs))
   const prefijo = `${API_URL}${API_PREFIX}`
   const ruta = String(url).startsWith(prefijo) ? String(url).slice(prefijo.length) : null
   if (ruta === null) throw new Error(`Petición inesperada fuera del backend: ${url}`)

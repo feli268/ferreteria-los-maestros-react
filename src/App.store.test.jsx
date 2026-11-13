@@ -270,6 +270,18 @@ describe('Checkout y resultado de la compra (con pasarela de pago simulada)', ()
     expect(fakeCalls().filter((c) => c.path === '/boletas')).toHaveLength(0)
   })
 
+  it('con un servidor lento, tras pagar llega a la boleta y no vuelve al carrito mientras se actualiza el stock', async () => {
+    const usuario = userEvent.setup()
+    await irAPagar(usuario, 'MC001', 1)
+    await llenarCheckout(usuario)
+    fakeDb().latenciaMs = 25 // el pago y la actualización del catálogo tardan
+    await usuario.click(screen.getByRole('button', { name: /Pagar ahora/ }))
+    expect(await screen.findByRole('heading', { name: '¡Compra realizada con éxito!' }, { timeout: 3000 })).toBeInTheDocument()
+    await new Promise((r) => setTimeout(r, 150)) // da tiempo a cualquier redirección tardía
+    expect(screen.getByRole('heading', { name: '¡Compra realizada con éxito!' })).toBeInTheDocument()
+    expect(ubicacion()).not.toMatch(/carrito/)
+  })
+
   it('pago aprobado: muestra la boleta, vacía el carrito y descuenta el stock en el backend', async () => {
     const usuario = userEvent.setup()
     await irAPagar(usuario, 'MC001', 2)

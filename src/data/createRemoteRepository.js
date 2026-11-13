@@ -36,20 +36,30 @@ export function createRemoteRepository({ key, idField = 'id', fetchAll }) {
       return error
     },
 
-    /** Pide la lista actualizada al backend. Si falla, deja status = 'error'. */
+    /**
+     * Pide la lista actualizada al backend.
+     * - La primera carga pasa por status "loading" y, si falla, queda en "error".
+     * - Si ya había datos ("ready") se actualiza en segundo plano: el status no cambia, para que la pantalla
+     *   no se reemplace por el aviso de carga (por ejemplo al actualizar el stock justo después de pagar).
+     *   Si esa actualización falla, se conservan los datos que ya había y el motivo queda en `error`.
+     */
     async refresh() {
       const miGeneracion = ++generacion
-      status = 'loading'
-      error = null
-      notificar()
+      const enSegundoPlano = status === 'ready'
+      if (!enSegundoPlano) {
+        status = 'loading'
+        error = null
+        notificar()
+      }
       try {
         const datos = await fetchAll()
         if (miGeneracion !== generacion) return cache // llegó tarde: ya hubo clear() u otro refresh()
         cache = Array.isArray(datos) ? datos : []
         status = 'ready'
+        error = null
       } catch (e) {
         if (miGeneracion !== generacion) return cache
-        status = 'error'
+        if (!enSegundoPlano) status = 'error'
         error = e
       }
       notificar()

@@ -36,12 +36,31 @@ describe('createRemoteRepository (copia en memoria de la base de datos del backe
     expect(estados).toEqual(['loading', 'ready'])
   })
 
-  it('si el backend falla queda en "error" con el motivo y conserva lo que tenía', async () => {
+  it('si la primera carga falla queda en "error" con el motivo', async () => {
+    const { repo } = crear(vi.fn().mockRejectedValue(new Error('sin conexión')))
+    await repo.refresh()
+    expect(repo.status).toBe('error')
+    expect(repo.error.message).toBe('sin conexión')
+    expect(repo.getAll()).toEqual([])
+  })
+
+  it('volver a pedir una lista ya cargada no pasa por "loading" (se actualiza en segundo plano)', async () => {
+    const nuevas = [{ id: 'A', nombre: 'Alfa 3' }]
+    const { repo } = crear(vi.fn().mockResolvedValueOnce(filas).mockResolvedValueOnce(nuevas))
+    await repo.refresh()
+    const estados = []
+    repo.subscribe(() => estados.push(repo.status))
+    await repo.refresh()
+    expect(estados).toEqual(['ready'])
+    expect(repo.getAll()).toEqual(nuevas)
+  })
+
+  it('si falla una actualización en segundo plano conserva los datos y sigue "ready"', async () => {
     const fetchAll = vi.fn().mockResolvedValueOnce(filas).mockRejectedValueOnce(new Error('sin conexión'))
     const { repo } = crear(fetchAll)
     await repo.refresh()
     await repo.refresh()
-    expect(repo.status).toBe('error')
+    expect(repo.status).toBe('ready')
     expect(repo.error.message).toBe('sin conexión')
     expect(repo.getAll()).toEqual(filas)
   })
