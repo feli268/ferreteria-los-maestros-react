@@ -3,10 +3,11 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import App from './App'
-import { messageRepository, orderRepository, productRepository, userRepository } from './data/db'
-import { paymentGateway } from './services/paymentGateway'
+import { categoryRepository, messageRepository, orderRepository, productRepository } from './data/db'
+import { fakeCalls, fakeDb } from './test/fakeBackend'
+import { iniciarSesion } from './test/session'
 
 function abrir(ruta = '/') {
   return render(
@@ -32,6 +33,21 @@ async function llenarCheckout(usuario, extra = {}) {
 }
 
 describe('Portada y catálogo', () => {
+  it('si el backend no responde, la tienda avisa y "Reintentar" carga el catálogo cuando vuelve', async () => {
+    const usuario = userEvent.setup()
+    categoryRepository.clear()
+    productRepository.clear() // como si se abriera la aplicación sin datos cargados
+    fakeDb().offline = true
+    abrir('/')
+    expect(await screen.findByText('No pudimos cargar los datos')).toBeInTheDocument()
+    expect(screen.getByText(/No fue posible comunicarse con el servidor/)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Productos destacados' })).toBeNull()
+
+    fakeDb().offline = false // el servidor vuelve
+    await usuario.click(screen.getByRole('button', { name: 'Reintentar' }))
+    expect(await screen.findByRole('heading', { name: 'Productos destacados' })).toBeInTheDocument()
+  })
+
   it('la portada muestra categorías, ofertas y productos destacados', () => {
     abrir('/')
     expect(screen.getByRole('heading', { name: 'Compra por categoría' })).toBeInTheDocument()
@@ -143,7 +159,7 @@ describe('Detalle de producto', () => {
   })
 
   it('un producto agotado no se puede comprar', () => {
-    productRepository.update('MC001', { stock: 0 })
+    productRepository.upsert({ ...productRepository.getById('MC001'), stock: 0 })
     abrir('/productos/MC001')
     expect(screen.queryByRole('button', { name: /Agregar al carrito/ })).toBeNull()
   })
@@ -245,18 +261,16 @@ describe('Checkout y resultado de la compra (con pasarela de pago simulada)', ()
     await screen.findByRole('heading', { name: 'Finalizar compra' })
   }
 
-  it('con campos vacíos muestra los errores y no cobra', async () => {
-    const cobrar = vi.spyOn(paymentGateway, 'charge')
+  it('con campos vacíos muestra los errores y no envía la compra al backend', async () => {
     const usuario = userEvent.setup()
     await irAPagar(usuario)
     await usuario.click(screen.getByRole('button', { name: /Pagar ahora/ }))
     expect(screen.getByText('El nombre es obligatorio.')).toBeInTheDocument()
     expect(screen.getByText('Selecciona una región.')).toBeInTheDocument()
-    expect(cobrar).not.toHaveBeenCalled()
+    expect(fakeCalls().filter((c) => c.path === '/boletas')).toHaveLength(0)
   })
 
-  it('pago aprobado: muestra la boleta, vacía el carrito y descuenta el stock', async () => {
-    vi.spyOn(paymentGateway, 'charge').mockResolvedValue({ approved: true, transactionId: 'TX-1' })
+  it('pago aprobado: muestra la boleta, vacía el carrito y descuenta el stock en el backend', async () => {
     const usuario = userEvent.setup()
     await irAPagar(usuario, 'MC001', 2)
     await llenarCheckout(usuario)
@@ -264,18 +278,18 @@ describe('Checkout y resultado de la compra (con pasarela de pago simulada)', ()
     await usuario.click(screen.getByRole('button', { name: /Pagar ahora/ }))
 
     expect(await screen.findByRole('heading', { name: '¡Compra realizada con éxito!' })).toBeInTheDocument()
-    expect(paymentGateway.charge).toHaveBeenCalledWith({ amount: 11980, method: 'tarjeta' })
     expect(screen.getByText(/Boleta electrónica/)).toBeInTheDocument()
     expect(screen.getByTestId('cart-count')).toHaveTextContent('0')
+    expect(fakeDb().products.find((p) => p.id === 'MC001').stock).toBe(78)
     expect(productRepository.getById('MC001').stock).toBe(78)
-    const nueva = orderRepository.getAll().at(-1)
+    const nueva = fakeDb().orders.at(-1)
+    expect(nueva.totals.total).toBe(11980)
     expect(nueva.status).toBe('Pagada')
     expect(nueva.customer.email).toBe('ana@gmail.com')
     expect(nueva.userRun).toBeNull()
   })
 
   it('la boleta se puede imprimir', async () => {
-    vi.spyOn(paymentGateway, 'charge').mockResolvedValue({ approved: true })
     const usuario = userEvent.setup()
     await irAPagar(usuario)
     await llenarCheckout(usuario)
@@ -285,24 +299,23 @@ describe('Checkout y resultado de la compra (con pasarela de pago simulada)', ()
   })
 
   it('pago rechazado: muestra el motivo, conserva el carrito y NO descuenta stock', async () => {
-    vi.spyOn(paymentGateway, 'charge').mockResolvedValue({ approved: false, reason: 'Fondos insuficientes' })
     const usuario = userEvent.setup()
     await irAPagar(usuario, 'MC001', 2)
     await llenarCheckout(usuario)
+    await usuario.click(screen.getByLabelText(/RECHAZADA/))
     await usuario.click(screen.getByRole('button', { name: /Pagar ahora/ }))
 
     expect(await screen.findByRole('heading', { name: 'No se pudo realizar el pago' })).toBeInTheDocument()
-    expect(screen.getByText(/Fondos insuficientes/)).toBeInTheDocument()
+    expect(screen.getByText(/Pago rechazado por el emisor/)).toBeInTheDocument()
     expect(screen.getByTestId('cart-count')).toHaveTextContent('2')
-    expect(productRepository.getById('MC001').stock).toBe(80)
-    expect(orderRepository.getAll().at(-1).status).toBe('Rechazada')
+    expect(fakeDb().products.find((p) => p.id === 'MC001').stock).toBe(80)
+    expect(fakeDb().orders.at(-1).status).toBe('Rechazada')
 
     await usuario.click(screen.getByRole('link', { name: 'VOLVER A REALIZAR EL PAGO' }))
     expect(await screen.findByRole('heading', { name: 'Finalizar compra' })).toBeInTheDocument()
   })
 
-  it('con sesión iniciada el formulario parte con los datos del usuario y guarda su RUN', async () => {
-    vi.spyOn(paymentGateway, 'charge').mockResolvedValue({ approved: true })
+  it('con sesión iniciada el formulario parte con los datos del usuario y el backend guarda su RUN', async () => {
     const usuario = userEvent.setup()
     // inicia sesión
     abrir('/login')
@@ -320,6 +333,7 @@ describe('Checkout y resultado de la compra (con pasarela de pago simulada)', ()
     expect(screen.getByLabelText(/^Comuna/)).toHaveValue('La Serena')
     await usuario.click(screen.getByRole('button', { name: /Pagar ahora/ }))
     await screen.findByRole('heading', { name: '¡Compra realizada con éxito!' })
+    expect(fakeDb().orders.at(-1).userRun).toBe('189998880')
     expect(orderRepository.getAll().at(-1).userRun).toBe('189998880')
   })
 
@@ -332,6 +346,7 @@ describe('Checkout y resultado de la compra (con pasarela de pago simulada)', ()
   })
 
   it('/compra-exitosa de una orden rechazada redirige a /compra-fallida y viceversa', () => {
+    iniciarSesion('admin@duoc.cl') // el personal ya tiene las órdenes cargadas
     const { unmount } = abrir('/compra-exitosa/20261012-001')
     expect(screen.getByRole('heading', { name: 'No se pudo realizar el pago' })).toBeInTheDocument()
     unmount()
@@ -361,7 +376,7 @@ describe('Cuenta: registro, login y contacto', () => {
     await usuario.click(screen.getByRole('button', { name: 'Crear cuenta' }))
 
     expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument()
-    expect(userRepository.getById('100000008').role).toBe('Cliente')
+    expect(fakeDb().users.find((u) => u.run === '100000008').role).toBe('Cliente')
 
     await usuario.type(screen.getByLabelText(/^Correo/), 'nuevo@gmail.com')
     await usuario.type(screen.getByLabelText(/^Contraseña/), 'abcd')
@@ -408,7 +423,7 @@ describe('Cuenta: registro, login y contacto', () => {
     await usuario.type(screen.getByLabelText(/^Correo/), 'admin@duoc.cl')
     await usuario.type(screen.getByLabelText(/^Contraseña/), 'mala')
     await usuario.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
-    expect(screen.getByText('Correo o contraseña incorrectos.')).toBeInTheDocument()
+    expect(await screen.findByText('Correo o contraseña incorrectos.')).toBeInTheDocument()
     await usuario.clear(screen.getByLabelText(/^Contraseña/))
     await usuario.type(screen.getByLabelText(/^Contraseña/), 'admin123')
     await usuario.click(screen.getByRole('button', { name: 'Iniciar sesión' }))

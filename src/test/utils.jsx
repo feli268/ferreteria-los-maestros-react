@@ -3,8 +3,9 @@ import { render } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthProvider } from '../context/AuthContext'
 import { CartProvider } from '../context/CartContext'
+import { DataProvider } from '../context/DataContext'
 import { ToastProvider } from '../context/ToastContext'
-import { authService } from '../services/authService'
+import { iniciarSesion } from './session'
 
 /** Muestra la ruta actual para poder comprobar redirecciones y navegación. */
 export function LocationDisplay() {
@@ -15,20 +16,23 @@ export function LocationDisplay() {
 /**
  * @param {React.ReactElement} ui
  * @param {{route?:string, path?:string, loginAs?:[string,string]}} options
- *   loginAs = [correo, contraseña] inicia sesión antes de renderizar.
+ *   loginAs = [correo, contraseña] deja la sesión iniciada antes de renderizar (la contraseña no se usa:
+ *   se salta el formulario de login; el login real se prueba en App.store.test.jsx).
  */
 export function renderWithProviders(ui, { route = '/', path = '*', loginAs } = {}) {
-  if (loginAs) authService.login(loginAs[0], loginAs[1])
+  if (loginAs) iniciarSesion(loginAs[0])
   return render(
     <MemoryRouter initialEntries={[route]}>
       <ToastProvider>
         <AuthProvider>
-          <CartProvider>
-            <Routes>
-              <Route path={path} element={ui} />
-            </Routes>
-            <LocationDisplay />
-          </CartProvider>
+          <DataProvider>
+            <CartProvider>
+              <Routes>
+                <Route path={path} element={ui} />
+              </Routes>
+              <LocationDisplay />
+            </CartProvider>
+          </DataProvider>
         </AuthProvider>
       </ToastProvider>
     </MemoryRouter>,

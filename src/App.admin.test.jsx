@@ -1,17 +1,19 @@
 // Pruebas de integración del panel de administración: acceso por rol, CRUD conectado
-// a la "base de datos" simulada y reportes. La sesión se deja guardada antes de abrir la ruta
-// (el flujo de login ya se prueba en App.store.test.jsx).
+// al backend (simulado con fetch falso, ver test/fakeBackend.js) y reportes. La sesión se deja
+// guardada antes de abrir la ruta (el flujo de login ya se prueba en App.store.test.jsx).
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import App from './App'
 import { categoryRepository, orderRepository, productRepository, userRepository } from './data/db'
+import { fakeDb } from './test/fakeBackend'
+import { iniciarSesion } from './test/session'
 
 const SESIONES = { admin: '111111111', vendedor: '222222222', cliente: '189998880' }
 
 function abrirComo(rol, ruta = '/admin') {
-  if (rol) localStorage.setItem('lm_session', JSON.stringify({ run: SESIONES[rol] }))
+  if (rol) iniciarSesion(SESIONES[rol])
   return render(
     <MemoryRouter initialEntries={[ruta]}>
       <App />
@@ -42,14 +44,28 @@ describe('Control de acceso al panel', () => {
     expect(screen.queryByRole('complementary', { name: 'Menú de administración' })).toBeNull()
   })
 
-  it('el Vendedor no ve Usuarios ni Categorías en el menú y se le bloquea la URL', () => {
+  it('el Vendedor solo ve Productos y Órdenes en el menú; lo demás no aparece y se le bloquea la URL', () => {
     abrirComo('vendedor', '/admin/usuarios')
     const menu = screen.getByRole('complementary', { name: 'Menú de administración' })
     expect(within(menu).getByRole('link', { name: /Órdenes/ })).toBeInTheDocument()
-    expect(within(menu).queryByRole('link', { name: /Usuarios/ })).toBeNull()
-    expect(within(menu).queryByRole('link', { name: /Categorías/ })).toBeNull()
-    expect(within(menu).queryByRole('link', { name: /Reportes/ })).toBeNull()
+    expect(within(menu).getByRole('link', { name: /Productos/ })).toBeInTheDocument()
+    for (const nombre of ['Dashboard', 'Categorías', 'Usuarios', 'Reportes', 'Mi perfil']) {
+      expect(within(menu).queryByRole('link', { name: new RegExp(nombre) })).toBeNull()
+    }
     expect(screen.getByText('Acceso restringido')).toBeInTheDocument()
+  })
+
+  it('el Vendedor no tiene dashboard: al entrar a /admin va directo al listado de productos', async () => {
+    abrirComo('vendedor', '/admin')
+    expect(await screen.findByRole('heading', { name: 'Productos' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Dashboard' })).toBeNull()
+  })
+
+  it('si el backend ya no reconoce al usuario de la sesión, se cierra y pide iniciar sesión', async () => {
+    abrirComo('admin', '/admin/productos')
+    fakeDb().users = fakeDb().users.filter((u) => u.run !== '111111111') // lo eliminaron en el backend
+    abrirComo(null, '/admin/productos') // se vuelve a abrir la aplicación con el token guardado
+    expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument()
   })
 
   it('el Administrador ve todas las opciones del menú', () => {
@@ -77,13 +93,6 @@ describe('Dashboard', () => {
     expect(screen.getByRole('link', { name: 'Productos: 17' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Stock crítico: 3' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Usuarios: 4' })).toBeInTheDocument()
-  })
-
-  it('al Vendedor no le muestra las cifras de usuarios ni los ingresos', () => {
-    abrirComo('vendedor')
-    expect(screen.queryByRole('link', { name: /^Usuarios:/ })).toBeNull()
-    expect(screen.queryByRole('link', { name: /^Ingresos/ })).toBeNull()
-    expect(screen.getByRole('link', { name: 'Órdenes: 4' })).toBeInTheDocument()
   })
 
   it('las cifras se actualizan en tiempo real al cambiar los datos', async () => {
@@ -126,21 +135,38 @@ describe('Productos (CRUD)', () => {
     expect(await screen.findByText('Brocha 3 pulgadas')).toBeInTheDocument()
     expect(await screen.findByText('Producto creado.')).toBeInTheDocument()
     expect(productRepository.getById('TST002')).toMatchObject({ price: 2500, stock: 12, categoryId: 'pinturas' })
+    expect(fakeDb().products.find((p) => p.id === 'TST002')).toMatchObject({ price: 2500, stock: 12 }) // quedó en el backend
   })
 
   it('valida el formulario: campos vacíos, precio inválido y código repetido', async () => {
     const usuario = userEvent.setup()
     abrirComo('admin', '/admin/productos/nuevo')
     await usuario.click(screen.getByRole('button', { name: 'Crear producto' }))
-    expect(screen.getByText('Revisa los campos marcados en rojo.')).toBeInTheDocument()
+    expect(await screen.findByText('Revisa los campos marcados en rojo.')).toBeInTheDocument()
     expect(screen.getByText('El nombre es obligatorio.')).toBeInTheDocument()
     expect(screen.getByText('Selecciona una categoría válida.')).toBeInTheDocument()
 
     await usuario.type(screen.getByLabelText(/^Código/), 'mc001')
     await usuario.type(screen.getByLabelText(/^Nombre/), 'Repetido')
     await usuario.click(screen.getByRole('button', { name: 'Crear producto' }))
-    expect(screen.getByText('Ya existe un producto con este código.')).toBeInTheDocument()
+    expect(await screen.findByText('Ya existe un producto con este código.')).toBeInTheDocument()
     expect(productRepository.getAll()).toHaveLength(17)
+  })
+
+  it('si el servidor no responde al guardar, muestra el aviso y no pierde lo escrito', async () => {
+    const usuario = userEvent.setup()
+    abrirComo('admin', '/admin/productos/nuevo')
+    await usuario.type(screen.getByLabelText(/^Código/), 'tst003')
+    await usuario.type(screen.getByLabelText(/^Nombre/), 'Sin conexión')
+    await usuario.selectOptions(screen.getByLabelText(/^Categoría/), 'pinturas')
+    await usuario.type(screen.getByLabelText(/^Precio/), '100')
+    await usuario.type(screen.getByLabelText(/^Stock(?! crítico)/), '1')
+    await usuario.type(screen.getByLabelText(/^Stock crítico/), '1')
+    fakeDb().offline = true
+    await usuario.click(screen.getByRole('button', { name: 'Crear producto' }))
+    expect(await screen.findByText(/No fue posible comunicarse con el servidor/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^Nombre/)).toHaveValue('Sin conexión')
+    expect(productRepository.getById('TST003')).toBeNull()
   })
 
   it('edita un producto y el cambio se refleja de inmediato en la lista', async () => {
@@ -153,7 +179,7 @@ describe('Productos (CRUD)', () => {
     await usuario.clear(precio)
     await usuario.type(precio, '6500')
     await usuario.click(screen.getByRole('button', { name: 'Guardar cambios' }))
-    expect(await within(fila('Cemento Polpaico gris 25 kg')).findByText('$6.500')).toBeInTheDocument()
+    await waitFor(() => expect(within(fila('Cemento Polpaico gris 25 kg')).getByText('$6.500')).toBeInTheDocument())
     expect(productRepository.getById('MC001').price).toBe(6500)
   })
 
@@ -169,16 +195,26 @@ describe('Productos (CRUD)', () => {
   it('eliminar pide confirmación; cancelar conserva, confirmar elimina', async () => {
     const usuario = userEvent.setup()
     abrirComo('admin', '/admin/productos')
-    await usuario.click(screen.getByRole('button', { name: 'Eliminar Rodillo profesional 23 cm' }))
-    expect(await screen.findByText(/¿Eliminar "Rodillo profesional 23 cm"\?/)).toBeInTheDocument()
+    await usuario.click(screen.getByRole('button', { name: 'Eliminar Enchufe doble con tierra' }))
+    expect(await screen.findByText(/¿Eliminar "Enchufe doble con tierra"\?/)).toBeInTheDocument()
     await usuario.click(screen.getByRole('button', { name: 'Cancelar' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(productRepository.getById('PI003')).toBeTruthy()
+    expect(productRepository.getById('EL003')).toBeTruthy()
 
-    await usuario.click(screen.getByRole('button', { name: 'Eliminar Rodillo profesional 23 cm' }))
+    await usuario.click(screen.getByRole('button', { name: 'Eliminar Enchufe doble con tierra' }))
     await usuario.click(await screen.findByRole('button', { name: 'Sí, eliminar' }))
-    await waitFor(() => expect(screen.queryByText('Rodillo profesional 23 cm')).toBeNull())
-    expect(productRepository.getById('PI003')).toBeNull()
+    await waitFor(() => expect(screen.queryByText('Enchufe doble con tierra')).toBeNull())
+    expect(productRepository.getById('EL003')).toBeNull()
+    expect(fakeDb().products.some((p) => p.id === 'EL003')).toBe(false) // también se borró en el backend
+  })
+
+  it('un producto con ventas no se puede eliminar: muestra el aviso del backend y se conserva', async () => {
+    const usuario = userEvent.setup()
+    abrirComo('admin', '/admin/productos')
+    await usuario.click(screen.getByRole('button', { name: 'Eliminar Rodillo profesional 23 cm' })) // vendido en una boleta
+    await usuario.click(await screen.findByRole('button', { name: 'Sí, eliminar' }))
+    expect(await screen.findByText(/tiene ventas registradas/)).toBeInTheDocument()
+    expect(productRepository.getById('PI003')).toBeTruthy()
   })
 
   it('la lista de stock crítico solo muestra los productos bajo su nivel', () => {
@@ -199,12 +235,41 @@ describe('Productos (CRUD)', () => {
     expect(screen.getByText('Producto no encontrado')).toBeInTheDocument()
   })
 
-  it('el Vendedor sí puede gestionar productos', async () => {
+  it('el Vendedor ve la lista y el detalle de productos, pero sin botones para modificar', async () => {
     const usuario = userEvent.setup()
     abrirComo('vendedor', '/admin/productos')
-    expect(screen.getByRole('link', { name: '+ Nuevo producto' })).toBeInTheDocument()
-    await usuario.click(screen.getByRole('link', { name: 'Editar Martillo carpintero 16 oz' }))
-    expect(await screen.findByLabelText(/^Nombre/)).toHaveValue('Martillo carpintero 16 oz')
+    expect(screen.getAllByRole('row')).toHaveLength(18)
+    expect(screen.queryByRole('link', { name: '+ Nuevo producto' })).toBeNull()
+    expect(screen.queryByRole('link', { name: /^Editar / })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Eliminar / })).toBeNull()
+    expect(screen.queryByRole('link', { name: /Stock crítico/ })).toBeNull()
+
+    await usuario.click(screen.getByRole('link', { name: 'Ver detalle de Martillo carpintero 16 oz' }))
+    expect(await screen.findByRole('heading', { name: /Martillo carpintero 16 oz/ })).toBeInTheDocument()
+    expect(screen.getByText('Código HE003 · Herramientas')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Editar' })).toBeNull()
+    await usuario.click(screen.getByRole('link', { name: /Volver a productos/ }))
+    expect(await screen.findByRole('heading', { name: 'Productos' })).toBeInTheDocument()
+  })
+
+  it('al Vendedor se le bloquean las pantallas de crear, editar, stock crítico y reporte', () => {
+    for (const ruta of ['/admin/productos/nuevo', '/admin/productos/MC001/editar', '/admin/productos/criticos', '/admin/productos/reportes']) {
+      const { unmount } = abrirComo('vendedor', ruta)
+      expect(screen.getByText('Acceso restringido')).toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('el Administrador ve el detalle de un producto con su precio con oferta y el botón Editar', async () => {
+    abrirComo('admin', '/admin/productos/MC002')
+    expect(await screen.findByRole('heading', { name: /Cemento Melón blanco 25 kg/ })).toBeInTheDocument()
+    expect(screen.getByText('$6.367')).toBeInTheDocument() // $7.490 con 15% de oferta
+    expect(screen.getByRole('link', { name: 'Editar' })).toHaveAttribute('href', '/admin/productos/MC002/editar')
+  })
+
+  it('el detalle de un código inexistente muestra "producto no encontrado"', () => {
+    abrirComo('vendedor', '/admin/productos/NOEXISTE')
+    expect(screen.getByText('Producto no encontrado')).toBeInTheDocument()
   })
 
   it('un cambio de precio del administrador llega al catálogo de la tienda', async () => {
@@ -234,7 +299,7 @@ describe('Categorías (CRUD)', () => {
     abrirComo('admin', '/admin/categorias/nueva')
     await usuario.type(screen.getByLabelText(/^Nombre/), 'Herramientas')
     await usuario.click(screen.getByRole('button', { name: 'Crear categoría' }))
-    expect(screen.getByText('Ya existe una categoría con ese nombre.')).toBeInTheDocument()
+    expect(await screen.findByText('Ya existe una categoría con ese nombre.')).toBeInTheDocument()
 
     await usuario.clear(screen.getByLabelText(/^Nombre/))
     await usuario.type(screen.getByLabelText(/^Nombre/), 'Jardinería')
@@ -256,7 +321,9 @@ describe('Categorías (CRUD)', () => {
 
   it('no deja eliminar una categoría con productos, pero sí una vacía', async () => {
     const usuario = userEvent.setup()
-    categoryRepository.create({ id: 'vacia', name: 'Vacía', icon: '📦', description: '' })
+    const vacia = { id: 'vacia', name: 'Vacía', icon: '📦', description: '' }
+    fakeDb().categories.push(vacia) // existe en el backend…
+    categoryRepository.upsert(vacia) // …y el panel ya la cargó
     abrirComo('admin', '/admin/categorias')
     await usuario.click(screen.getByRole('button', { name: 'Eliminar Pinturas' }))
     await usuario.click(await screen.findByRole('button', { name: 'Sí, eliminar' }))
@@ -266,6 +333,7 @@ describe('Categorías (CRUD)', () => {
     await usuario.click(screen.getByRole('button', { name: 'Eliminar Vacía' }))
     await usuario.click(await screen.findByRole('button', { name: 'Sí, eliminar' }))
     await waitFor(() => expect(categoryRepository.getById('vacia')).toBeNull())
+    expect(fakeDb().categories.some((c) => c.id === 'vacia')).toBe(false)
   })
 
   it('una categoría inexistente al editar muestra "no encontrada"', () => {
@@ -291,13 +359,13 @@ describe('Usuarios (CRUD)', () => {
     abrirComo('admin', '/admin/usuarios/nuevo')
     await usuario.type(screen.getByLabelText(/^RUN/), '111111111')
     await usuario.click(screen.getByRole('button', { name: 'Guardar usuario' }))
-    expect(screen.getByText('Ya existe un usuario registrado con este RUN.')).toBeInTheDocument()
+    expect(await screen.findByText('Ya existe un usuario registrado con este RUN.')).toBeInTheDocument()
 
     await usuario.clear(screen.getByLabelText(/^RUN/))
     await usuario.type(screen.getByLabelText(/^RUN/), '10.000.000-8')
     await usuario.type(screen.getByLabelText(/^Correo/), 'admin@duoc.cl')
     await usuario.click(screen.getByRole('button', { name: 'Guardar usuario' }))
-    expect(screen.getByText('Este correo ya está registrado.')).toBeInTheDocument()
+    expect(await screen.findByText('Este correo ya está registrado.')).toBeInTheDocument()
 
     await usuario.selectOptions(screen.getByLabelText(/^Rol/), 'Vendedor')
     await usuario.type(screen.getByLabelText(/^Nombre/), 'Nuevo')
@@ -313,6 +381,7 @@ describe('Usuarios (CRUD)', () => {
 
     expect(await screen.findByText('nuevo@duoc.cl')).toBeInTheDocument()
     expect(userRepository.getById('100000008').role).toBe('Vendedor')
+    expect(fakeDb().users.find((u) => u.run === '100000008').role).toBe('Vendedor')
   })
 
   it('edita un usuario (la contraseña es opcional al editar)', async () => {
@@ -325,7 +394,7 @@ describe('Usuarios (CRUD)', () => {
     await usuario.type(nombre, 'María José')
     await usuario.click(screen.getByRole('button', { name: 'Guardar usuario' }))
     expect(await screen.findByText('María José Rojas')).toBeInTheDocument()
-    expect(userRepository.getById('123456785').password).toBe('maria123')
+    expect(fakeDb().users.find((u) => u.run === '123456785').password).toBe('maria123') // la clave no cambió en el backend
   })
 
   it('la ficha de un cliente muestra su historial de compras', async () => {
@@ -404,12 +473,20 @@ describe('Órdenes', () => {
     expect(screen.getByText('Orden no encontrada')).toBeInTheDocument()
   })
 
+  it('el Vendedor ve la lista y el detalle de órdenes', async () => {
+    const usuario = userEvent.setup()
+    abrirComo('vendedor', '/admin/ordenes')
+    expect(screen.getAllByRole('row')).toHaveLength(5)
+    await usuario.click(screen.getByRole('link', { name: /20261008-001/ }))
+    expect(await screen.findByRole('heading', { name: 'Orden 20261008-001' })).toBeInTheDocument()
+  })
+
   it('una compra nueva aparece en el panel sin recargar', () => {
     abrirComo('admin', '/admin/ordenes')
     expect(screen.getAllByRole('row')).toHaveLength(5)
     const base = orderRepository.getAll()[0]
     // misma "base de datos" que usa el checkout: un alta externa se refleja en pantalla
-    orderRepository.create({ ...base, number: '20261015-001', createdAt: '2026-10-15T10:00:00.000Z' })
+    orderRepository.upsert({ ...base, number: '20261015-001', createdAt: '2026-10-15T10:00:00.000Z' })
     return waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(6))
   })
 })
@@ -437,21 +514,25 @@ describe('Reportes y perfil', () => {
     expect(screen.getByText('Pedidos pagados').nextSibling).toHaveTextContent('1')
   })
 
-  it('el Vendedor no puede ver los reportes de ventas', () => {
-    abrirComo('vendedor', '/admin/reportes')
+  it('el Vendedor no puede ver los reportes de ventas ni "Mi perfil"', () => {
+    const { unmount } = abrirComo('vendedor', '/admin/reportes')
+    expect(screen.getByText('Acceso restringido')).toBeInTheDocument()
+    unmount()
+    abrirComo('vendedor', '/admin/perfil')
     expect(screen.getByText('Acceso restringido')).toBeInTheDocument()
   })
 
-  it('el perfil carga los datos de la sesión y los guarda sin cambiar el rol', async () => {
+  it('el perfil carga los datos de la sesión y los guarda en el backend sin cambiar el rol', async () => {
     const usuario = userEvent.setup()
-    abrirComo('vendedor', '/admin/perfil')
+    abrirComo('admin', '/admin/perfil')
     const direccion = await screen.findByLabelText(/^Dirección/)
-    expect(direccion).toHaveValue('Calle Videla 505')
+    expect(direccion).toHaveValue('Av. Balmaceda 1020')
     await usuario.clear(direccion)
     await usuario.type(direccion, 'Nueva dirección 1')
     await usuario.click(screen.getByRole('button', { name: 'Guardar mis datos' }))
     expect(await screen.findByText('Tus datos fueron actualizados.')).toBeInTheDocument()
-    expect(userRepository.getById('222222222')).toMatchObject({ address: 'Nueva dirección 1', role: 'Vendedor' })
+    expect(fakeDb().users.find((u) => u.run === '111111111')).toMatchObject({ address: 'Nueva dirección 1', role: 'Administrador' })
+    expect(JSON.parse(localStorage.getItem('lm_session')).user.address).toBe('Nueva dirección 1') // la sesión también se actualiza
   })
 
   it('el perfil muestra errores si un dato es inválido', async () => {
@@ -460,7 +541,7 @@ describe('Reportes y perfil', () => {
     const nombre = await screen.findByLabelText(/^Nombre/)
     await usuario.clear(nombre)
     await usuario.click(screen.getByRole('button', { name: 'Guardar mis datos' }))
-    expect(screen.getByText('El nombre es obligatorio.')).toBeInTheDocument()
+    expect(await screen.findByText('El nombre es obligatorio.')).toBeInTheDocument()
     expect(userRepository.getById('111111111').name).toBe('Eduardo')
   })
 })

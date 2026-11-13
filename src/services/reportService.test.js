@@ -1,10 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { categoryRepository, orderRepository, productRepository, userRepository } from '../data/db'
+import { iniciarSesion } from '../test/session'
 import { filterOrders, getDashboardStats, salesByCategory, salesByProduct, summarizeOrders } from './reportService'
 
 const orders = () => orderRepository.getAll()
 
 describe('reportService', () => {
+  // Los reportes se calculan en el navegador con las órdenes y usuarios que el backend entrega al Administrador.
+  beforeEach(() => {
+    iniciarSesion('admin@duoc.cl')
+  })
+
   it('summarizeOrders cuenta pagadas y rechazadas y suma solo los ingresos pagados', () => {
     const r = summarizeOrders(orders())
     expect(r.totalOrders).toBe(4)

@@ -39,14 +39,22 @@ describe('Entorno de pruebas (humo)', () => {
     expect(calculadora.doble(2)).toBe(99)
   })
 
-  it('la base de datos simulada parte limpia en cada prueba', async () => {
-    const { productRepository } = await import('../data/db')
-    productRepository.update('MC001', { stock: 1 })
-    expect(productRepository.getById('MC001').stock).toBe(1)
+  it('el backend falso parte limpio en cada prueba', async () => {
+    const { fakeDb } = await import('./fakeBackend')
+    fakeDb().products.find((p) => p.id === 'MC001').stock = 1
+    expect(fakeDb().products.find((p) => p.id === 'MC001').stock).toBe(1)
   })
 
   it('...y la modificación anterior no se arrastra a esta prueba', async () => {
+    const { fakeDb } = await import('./fakeBackend')
     const { productRepository } = await import('../data/db')
-    expect(productRepository.getById('MC001').stock).toBe(80)
+    expect(fakeDb().products.find((p) => p.id === 'MC001').stock).toBe(80)
+    expect(productRepository.getById('MC001').stock).toBe(80) // el catálogo ya viene cargado
+  })
+
+  it('fetch está reemplazado por el backend falso: las pruebas no salen a internet', async () => {
+    const respuesta = await fetch('http://localhost:8080/api/v1/categorias')
+    expect(respuesta.ok).toBe(true)
+    expect(await respuesta.json()).toHaveLength(5)
   })
 })
