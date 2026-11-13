@@ -1,7 +1,10 @@
-// Checkout y pedidos: valida los datos, "cobra" con la pasarela simulada,
-// descuenta el stock solo si el pago es aprobado y guarda la orden.
+// Checkout y pedidos: valida los datos en el navegador (respuesta inmediata) y envía la compra al backend
+// (POST /api/v1/boletas). El backend calcula los precios, cobra con la pasarela simulada, descuenta
+// el stock solo si el pago es aprobado, genera el número de orden y guarda la boleta.
+import { boletasApi } from '../api'
 import { DELIVERY_OPTIONS, PAYMENT_METHODS } from '../data/catalogs'
 import { orderRepository, productRepository } from '../data/db'
+import { storage } from '../data/storage'
 import { calculateTotals, findCouponPercent, getEffectivePrice, getShippingCost } from '../utils/pricing'
 import {
   collectErrors,
@@ -10,20 +13,9 @@ import {
   validateRegionComuna,
   validateRequired,
 } from '../utils/validators'
-import { paymentGateway } from './paymentGateway'
-import { productService } from './productService'
+import { falla } from './apiResult'
 
 export const ORDER_STATUS = { PAID: 'Pagada', REJECTED: 'Rechazada' }
-
-const pad = (n, largo) => String(n).padStart(largo, '0')
-
-/** Número de orden con formato AAAAMMDD-NNN (NNN se reinicia cada día). */
-export function generateOrderNumber(date = new Date()) {
-  const prefijo = `${date.getFullYear()}${pad(date.getMonth() + 1, 2)}${pad(date.getDate(), 2)}`
-  const delDia = orderRepository.find((o) => o.number.startsWith(`${prefijo}-`))
-  const mayor = delDia.reduce((max, o) => Math.max(max, parseInt(o.number.split('-')[1], 10) || 0), 0)
-  return `${prefijo}-${pad(mayor + 1, 3)}`
-}
 
 /** Une los ítems del carrito ({id, qty}) con los productos vigentes de la base de datos. */
 export function buildOrderLines(cartItems) {
@@ -80,17 +72,14 @@ export const orderService = {
    * @returns {Promise<{ok:true, order:object} | {ok:false, errors:object}>}
    *   Si el pago es rechazado también devuelve ok:true, con order.status === 'Rechazada'.
    */
-  async placeOrder({ form, cartItems, couponCode = '', userRun = null }) {
+  async placeOrder({ form, cartItems, couponCode = '' }) {
     const errors = validateCheckoutForm(form)
     if (Object.keys(errors).length > 0) return { ok: false, errors }
 
-    const { lines, couponPercent, totals } = summarizeCart(cartItems, {
-      couponCode,
-      deliveryId: form.deliveryId,
-    })
+    const { lines } = summarizeCart(cartItems, { couponCode, deliveryId: form.deliveryId })
     if (lines.length === 0) return { ok: false, errors: { cart: 'Tu carrito está vacío.' } }
 
-    // El stock se revisa al pagar: pudo cambiar desde que se agregó al carrito.
+    // El stock se revisa al pagar: pudo cambiar desde que se agregó al carrito (el backend lo vuelve a revisar).
     const sinStock = lines.find((l) => l.quantity > (productRepository.getById(l.productId)?.stock ?? 0))
     if (sinStock) {
       return {
@@ -99,45 +88,41 @@ export const orderService = {
       }
     }
 
-    let pago
+    let order
     try {
-      pago = await paymentGateway.charge({ amount: totals.total, method: form.paymentMethod })
-    } catch {
-      pago = { approved: false, reason: 'No fue posible comunicarse con el medio de pago.' }
+      order = await boletasApi.crear({
+        form: {
+          name: form.name.trim(),
+          lastname: form.lastname.trim(),
+          email: form.email.trim().toLowerCase(),
+          street: form.street.trim(),
+          apartment: String(form.apartment ?? '').trim(),
+          region: form.region,
+          comuna: form.comuna,
+          notes: String(form.notes ?? '').trim(),
+          deliveryId: form.deliveryId,
+          paymentMethod: form.paymentMethod,
+        },
+        items: lines.map((l) => ({ id: l.productId, qty: l.quantity })),
+        couponCode: String(couponCode ?? '').trim().toUpperCase(),
+      })
+    } catch (error) {
+      const fallo = falla(error)
+      return { ok: false, errors: fallo.errors.general ? { cart: fallo.errors.general } : fallo.errors }
     }
 
-    const delivery = DELIVERY_OPTIONS.find((d) => d.id === form.deliveryId)
-    const order = orderRepository.create({
-      number: generateOrderNumber(),
-      createdAt: new Date().toISOString(),
-      status: pago.approved ? ORDER_STATUS.PAID : ORDER_STATUS.REJECTED,
-      failureReason: pago.approved ? null : (pago.reason ?? 'Pago rechazado.'),
-      userRun,
-      customer: {
-        name: form.name.trim(),
-        lastname: form.lastname.trim(),
-        email: form.email.trim().toLowerCase(),
-      },
-      address: {
-        street: form.street.trim(),
-        apartment: String(form.apartment ?? '').trim(),
-        region: form.region,
-        comuna: form.comuna,
-        notes: String(form.notes ?? '').trim(),
-      },
-      delivery: { id: delivery.id, label: delivery.label, cost: totals.shipping },
-      paymentMethod: form.paymentMethod,
-      coupon: couponPercent > 0 ? { code: String(couponCode).trim().toUpperCase(), percent: couponPercent } : null,
-      items: lines,
-      totals,
-    })
-
-    if (pago.approved) lines.forEach((l) => productService.decreaseStock(l.productId, l.quantity))
+    // La boleta queda en la copia local y en el navegador (para poder ver el comprobante al recargar).
+    orderRepository.upsert(order)
+    storage.set('last_order', order)
+    // Si el pago fue aprobado, el stock cambió en el backend: se vuelve a pedir el catálogo.
+    if (order.status === ORDER_STATUS.PAID) await productRepository.refresh()
     return { ok: true, order }
   },
 
+  /** Boleta por número: de la lista cargada o, si recién se compró y se recargó la página, la última compra. */
   getByNumber(number) {
-    return orderRepository.getById(number)
+    const ultima = storage.get('last_order')
+    return orderRepository.getById(number) ?? (ultima?.number === number ? ultima : null)
   },
 
   /** Pedidos más recientes primero. */

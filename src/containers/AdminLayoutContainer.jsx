@@ -7,6 +7,7 @@ import AdminLayout from '../components/templates/AdminLayout'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { ADMIN_MENU } from '../data/adminMenu'
+import DataGateContainer from './DataGateContainer'
 
 export default function AdminLayoutContainer() {
   const { user, isStaff, can, logout } = useAuth()
@@ -48,7 +49,9 @@ export default function AdminLayoutContainer() {
         />
       }
     >
-      <Outlet />
+      <DataGateContainer>
+        <Outlet />
+      </DataGateContainer>
     </AdminLayout>
   )
 }

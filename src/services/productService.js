@@ -1,4 +1,5 @@
 // CRUD y validación de productos e inventario.
+import { productosApi } from '../api'
 import { categoryRepository, productRepository } from '../data/db'
 import {
   collectErrors,
@@ -10,6 +11,7 @@ import {
   validateRequired,
   validateStock,
 } from '../utils/validators'
+import { falla } from './apiResult'
 
 /**
  * Devuelve { campo: mensaje } (vacío si todo está bien).
@@ -55,35 +57,44 @@ function normalizar(data) {
 }
 
 export const productService = {
-  create(data) {
+  /** POST /api/v1/productos */
+  async create(data) {
     const errors = validateProductForm(data, { mode: 'create' })
     if (Object.keys(errors).length > 0) return { ok: false, errors }
-    const product = productRepository.create({
-      id: String(data.id).trim().toUpperCase(),
-      ...normalizar(data),
-    })
-    return { ok: true, product }
+    try {
+      const product = productRepository.upsert(
+        await productosApi.crear({ id: String(data.id).trim().toUpperCase(), ...normalizar(data) }),
+      )
+      return { ok: true, product }
+    } catch (error) {
+      return falla(error)
+    }
   },
 
-  update(id, data) {
+  /** PUT /api/v1/productos/{id} */
+  async update(id, data) {
     if (!productRepository.getById(id)) {
       return { ok: false, errors: { general: 'El producto no existe.' } }
     }
     const errors = validateProductForm(data, { mode: 'edit' })
     if (Object.keys(errors).length > 0) return { ok: false, errors }
-    const product = productRepository.update(id, normalizar(data))
-    return { ok: true, product }
+    try {
+      const product = productRepository.upsert(await productosApi.actualizar(id, normalizar(data)))
+      return { ok: true, product }
+    } catch (error) {
+      return falla(error)
+    }
   },
 
-  remove(id) {
-    return { ok: productRepository.remove(id) }
-  },
-
-  /** Descuenta stock (compra pagada). Nunca deja el stock en negativo. */
-  decreaseStock(id, quantity) {
-    const product = productRepository.getById(id)
-    if (!product) return null
-    return productRepository.update(id, { stock: Math.max(0, product.stock - quantity) })
+  /** DELETE /api/v1/productos/{id}. El backend no deja borrar productos que ya tienen ventas. */
+  async remove(id) {
+    try {
+      await productosApi.eliminar(id)
+      productRepository.drop(id)
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, message: falla(error).message }
+    }
   },
 
   /** Productos con stock igual o inferior al umbral crítico, los más urgentes primero. */

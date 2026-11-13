@@ -5,12 +5,12 @@ import NotFoundPage from '../components/pages/NotFoundPage'
 import PurchaseFailedPage from '../components/pages/PurchaseFailedPage'
 import PurchaseSuccessPage from '../components/pages/PurchaseSuccessPage'
 import { useOrders } from '../hooks/useRepository'
-import { ORDER_STATUS } from '../services/orderService'
+import { ORDER_STATUS, orderService } from '../services/orderService'
 
 export default function PurchaseResultContainer({ expected }) {
   const { orderNumber } = useParams()
-  const orders = useOrders()
-  const order = orders.find((o) => o.number === orderNumber)
+  useOrders() // se vuelve a dibujar si cambia la lista de órdenes
+  const order = orderService.getByNumber(orderNumber)
 
   if (!order) {
     return <NotFoundPage title="Pedido no encontrado" message="No existe un pedido con ese número." />

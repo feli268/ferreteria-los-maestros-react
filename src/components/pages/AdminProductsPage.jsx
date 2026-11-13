@@ -17,7 +17,7 @@ export default function AdminProductsPage({
   categories,
   query,
   onQueryChange,
-  canCreate = true,
+  canManage = true,
   pendingDelete,
   onAskDelete,
   onCancelDelete,
@@ -45,12 +45,19 @@ export default function AdminProductsPage({
       header: 'Acciones',
       render: (p) => (
         <div className="d-flex gap-1">
-          <Link to={`/admin/productos/${p.id}/editar`} className="btn btn-outline-primary btn-sm" aria-label={`Editar ${p.name}`}>
-            Editar
+          <Link to={`/admin/productos/${p.id}`} className="btn btn-outline-secondary btn-sm" aria-label={`Ver detalle de ${p.name}`}>
+            Ver detalle
           </Link>
-          <ActionButton variant="outline-danger" size="sm" aria-label={`Eliminar ${p.name}`} onClick={() => onAskDelete(p)}>
-            Eliminar
-          </ActionButton>
+          {canManage && (
+            <>
+              <Link to={`/admin/productos/${p.id}/editar`} className="btn btn-outline-primary btn-sm" aria-label={`Editar ${p.name}`}>
+                Editar
+              </Link>
+              <ActionButton variant="outline-danger" size="sm" aria-label={`Eliminar ${p.name}`} onClick={() => onAskDelete(p)}>
+                Eliminar
+              </ActionButton>
+            </>
+          )}
         </div>
       ),
     },
@@ -62,11 +69,13 @@ export default function AdminProductsPage({
         title={title}
         subtitle={subtitle}
         actions={
-          <>
-            {canCreate && <Link to="/admin/productos/nuevo" className="btn btn-primary">+ Nuevo producto</Link>}
-            <Link to="/admin/productos/criticos" className="btn btn-outline-warning">⚠️ Stock crítico</Link>
-            <Link to="/admin/productos/reportes" className="btn btn-outline-secondary">📋 Reporte</Link>
-          </>
+          canManage && (
+            <>
+              <Link to="/admin/productos/nuevo" className="btn btn-primary">+ Nuevo producto</Link>
+              <Link to="/admin/productos/criticos" className="btn btn-outline-warning">⚠️ Stock crítico</Link>
+              <Link to="/admin/productos/reportes" className="btn btn-outline-secondary">📋 Reporte</Link>
+            </>
+          )
         }
       />
       <div style={{ maxWidth: 420 }}>

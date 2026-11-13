@@ -36,8 +36,8 @@ export function AdminUsersContainer() {
       pendingDelete={pendingDelete}
       onAskDelete={setPendingDelete}
       onCancelDelete={() => setPendingDelete(null)}
-      onConfirmDelete={() => {
-        const resultado = userService.remove(pendingDelete.run, sesion?.run)
+      onConfirmDelete={async () => {
+        const resultado = await userService.remove(pendingDelete.run, sesion?.run)
         notify(resultado.ok ? 'Usuario eliminado.' : resultado.message, resultado.ok ? 'info' : 'danger')
         setPendingDelete(null)
       }}
@@ -49,6 +49,7 @@ export function AdminUserFormContainer() {
   const { run } = useParams()
   const editing = Boolean(run)
   const users = useUsers()
+  const { user: sesion, updateUser } = useAuth()
   const usuario = editing ? users.find((u) => u.run === cleanRun(run)) : null
   const form = useForm(
     usuario ? { ...EMPTY_USER, ...usuario, password: '', passwordConfirm: '' } : { ...EMPTY_USER, role: '' },
@@ -59,16 +60,18 @@ export function AdminUserFormContainer() {
 
   if (editing && !usuario) return <NotFoundPage title="Usuario no encontrado" />
 
-  const enviar = (evento) => {
+  const enviar = async (evento) => {
     evento.preventDefault()
     setSubmitting(true)
-    const resultado = editing ? userService.update(usuario.run, form.values) : userService.create(form.values)
+    const resultado = await (editing ? userService.update(usuario.run, form.values) : userService.create(form.values))
     setSubmitting(false)
     if (!resultado.ok) {
       form.setErrors(resultado.errors)
-      form.setFormError('Revisa los campos marcados en rojo.')
+      form.setFormError(resultado.errors.general ?? 'Revisa los campos marcados en rojo.')
       return
     }
+    // Si el administrador editó su propio usuario, la sesión se actualiza con los datos nuevos.
+    if (editing && sesion?.run === resultado.user.run) updateUser(resultado.user)
     notify(editing ? 'Usuario actualizado.' : 'Usuario creado.')
     navigate('/admin/usuarios')
   }

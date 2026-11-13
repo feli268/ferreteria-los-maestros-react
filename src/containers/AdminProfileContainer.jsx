@@ -9,21 +9,22 @@ import { useForm } from '../hooks/useForm'
 import { userService } from '../services/userService'
 
 export default function AdminProfileContainer() {
-  const { user } = useAuth()
+  const { user, updateUser } = useAuth()
   const form = useForm({ ...EMPTY_USER, ...user, password: '', passwordConfirm: '' })
   const [submitting, setSubmitting] = useState(false)
   const { notify } = useToast()
 
-  const enviar = (evento) => {
+  const enviar = async (evento) => {
     evento.preventDefault()
     setSubmitting(true)
-    const resultado = userService.updateProfile(user.run, form.values)
+    const resultado = await userService.updateProfile(user.run, form.values)
     setSubmitting(false)
     if (!resultado.ok) {
       form.setErrors(resultado.errors)
-      form.setFormError('Revisa los campos marcados en rojo.')
+      form.setFormError(resultado.errors.general ?? 'Revisa los campos marcados en rojo.')
       return
     }
+    updateUser(resultado.user)
     form.setFormError('')
     notify('Tus datos fueron actualizados.')
   }

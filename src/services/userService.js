@@ -1,4 +1,5 @@
 // CRUD y validación de usuarios (registro público y mantenedor del administrador).
+import { authApi, usuariosApi } from '../api'
 import { ROLES } from '../data/catalogs'
 import { orderRepository, userRepository } from '../data/db'
 import {
@@ -11,6 +12,7 @@ import {
   validateRequired,
   validateRun,
 } from '../utils/validators'
+import { falla } from './apiResult'
 
 /**
  * Valida el formulario de usuario. Devuelve { campo: mensaje } (vacío si todo está bien).
@@ -62,35 +64,44 @@ function normalizar(data) {
   }
 }
 
+/** Cuerpo que recibe el backend (UsuarioRequest). La contraseña solo se envía si se escribió una. */
+function cuerpo(data, { run, role } = {}) {
+  const body = { ...normalizar(data), run: run ?? cleanRun(data.run) }
+  if (data.password) {
+    body.password = data.password
+    body.passwordConfirm = data.passwordConfirm
+  }
+  if (role !== undefined) body.role = role
+  return body
+}
+
 export const userService = {
-  /** Registro público: siempre crea un Cliente. */
-  register(data) {
+  /** Registro público (POST /api/v1/auth/registro): el backend siempre crea un Cliente. */
+  async register(data) {
     const errors = validateUserForm(data, { mode: 'create' })
     if (Object.keys(errors).length > 0) return { ok: false, errors }
-    const user = userRepository.create({
-      ...normalizar(data),
-      run: cleanRun(data.run),
-      password: data.password,
-      role: ROLES.CLIENT,
-    })
-    return { ok: true, user }
+    try {
+      return { ok: true, user: await authApi.registro(cuerpo(data)) }
+    } catch (error) {
+      return falla(error)
+    }
   },
 
-  /** Alta desde el mantenedor de usuarios (permite elegir rol). */
-  create(data) {
+  /** Alta desde el mantenedor de usuarios (POST /api/v1/usuarios): permite elegir rol. */
+  async create(data) {
     const errors = validateUserForm(data, { mode: 'create' })
     if (!Object.values(ROLES).includes(data.role)) errors.role = 'Selecciona un rol válido.'
     if (Object.keys(errors).length > 0) return { ok: false, errors }
-    const user = userRepository.create({
-      ...normalizar(data),
-      run: cleanRun(data.run),
-      password: data.password,
-      role: data.role,
-    })
-    return { ok: true, user }
+    try {
+      const user = userRepository.upsert(await usuariosApi.crear(cuerpo(data, { role: data.role })))
+      return { ok: true, user }
+    } catch (error) {
+      return falla(error)
+    }
   },
 
-  update(run, data) {
+  /** Edición desde el mantenedor (PUT /api/v1/usuarios/{run}). */
+  async update(run, data) {
     const existente = userRepository.getById(run)
     if (!existente) return { ok: false, errors: { general: 'El usuario no existe.' } }
     const errors = validateUserForm(data, { mode: 'edit', originalRun: run })
@@ -102,15 +113,19 @@ export const userService = {
       if (admins.length <= 1) errors.role = 'Debe existir al menos un administrador.'
     }
     if (Object.keys(errors).length > 0) return { ok: false, errors }
-    const cambios = { ...normalizar(data) }
-    if (data.role !== undefined) cambios.role = data.role
-    if (data.password) cambios.password = data.password
-    const user = userRepository.update(run, cambios)
-    return { ok: true, user }
+    try {
+      const user = userRepository.upsert(await usuariosApi.actualizar(run, cuerpo(data, { run, role: data.role })))
+      return { ok: true, user }
+    } catch (error) {
+      return falla(error)
+    }
   },
 
-  /** No se puede eliminar al último administrador ni a quien tiene la sesión abierta. */
-  remove(run, currentUserRun = null) {
+  /**
+   * DELETE /api/v1/usuarios/{run}.
+   * No se puede eliminar al último administrador ni a quien tiene la sesión abierta.
+   */
+  async remove(run, currentUserRun = null) {
     const usuario = userRepository.getById(run)
     if (!usuario) return { ok: false, message: 'El usuario no existe.' }
     if (currentUserRun && usuario.run === currentUserRun) {
@@ -120,13 +135,26 @@ export const userService = {
       const admins = userRepository.find((u) => u.role === ROLES.ADMIN)
       if (admins.length <= 1) return { ok: false, message: 'Debe existir al menos un administrador.' }
     }
-    userRepository.remove(run)
-    return { ok: true }
+    try {
+      await usuariosApi.eliminar(run)
+      userRepository.drop(run)
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, message: falla(error).message }
+    }
   },
 
-  /** Edición del propio perfil: sin cambio de rol. */
-  updateProfile(run, data) {
-    return userService.update(run, { ...data, role: undefined })
+  /** Edición del propio perfil (PUT /api/v1/auth/me): el backend nunca cambia el rol por esta vía. */
+  async updateProfile(run, data) {
+    const errors = validateUserForm(data, { mode: 'edit', originalRun: run })
+    if (Object.keys(errors).length > 0) return { ok: false, errors }
+    try {
+      const user = await authApi.actualizarPerfil(cuerpo(data, { run }))
+      if (userRepository.getById(user.run)) userRepository.upsert(user) // mantiene al día la lista de usuarios
+      return { ok: true, user }
+    } catch (error) {
+      return falla(error)
+    }
   },
 
   /** Historial de compras de un usuario (más recientes primero). */

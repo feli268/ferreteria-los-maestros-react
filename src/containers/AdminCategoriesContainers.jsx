@@ -28,8 +28,8 @@ export function AdminCategoriesContainer() {
       pendingDelete={pendingDelete}
       onAskDelete={setPendingDelete}
       onCancelDelete={() => setPendingDelete(null)}
-      onConfirmDelete={() => {
-        const resultado = categoryService.remove(pendingDelete.id)
+      onConfirmDelete={async () => {
+        const resultado = await categoryService.remove(pendingDelete.id)
         notify(resultado.ok ? `Categoría "${pendingDelete.name}" eliminada.` : resultado.message, resultado.ok ? 'info' : 'danger')
         setPendingDelete(null)
       }}
@@ -53,13 +53,14 @@ export function AdminCategoryFormContainer() {
 
   if (editing && !category) return <NotFoundPage title="Categoría no encontrada" />
 
-  const enviar = (evento) => {
+  const enviar = async (evento) => {
     evento.preventDefault()
     setSubmitting(true)
-    const resultado = editing ? categoryService.update(id, form.values) : categoryService.create(form.values)
+    const resultado = await (editing ? categoryService.update(id, form.values) : categoryService.create(form.values))
     setSubmitting(false)
     if (!resultado.ok) {
       form.setErrors(resultado.errors)
+      form.setFormError(resultado.errors.general ?? '')
       return
     }
     notify(editing ? 'Categoría actualizada.' : 'Categoría creada.')

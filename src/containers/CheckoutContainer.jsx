@@ -1,4 +1,4 @@
-// Contenedor: pago. Valida, cobra con la pasarela simulada y navega al resultado.
+// Contenedor: pago. Valida, envía la compra al backend (que cobra con la pasarela simulada) y navega al resultado.
 import { useRef, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import CheckoutPage from '../components/pages/CheckoutPage'
@@ -48,7 +48,6 @@ export default function CheckoutContainer() {
         form: form.values,
         cartItems: cart.items,
         couponCode: cart.couponCode,
-        userRun: user?.run ?? null,
       })
       if (!resultado.ok) {
         form.setErrors(resultado.errors)

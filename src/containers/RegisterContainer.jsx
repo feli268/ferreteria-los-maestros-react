@@ -13,14 +13,14 @@ export default function RegisterContainer() {
   const { notify } = useToast()
   const navigate = useNavigate()
 
-  const enviar = (evento) => {
+  const enviar = async (evento) => {
     evento.preventDefault()
     setSubmitting(true)
-    const resultado = userService.register(values)
+    const resultado = await userService.register(values)
     setSubmitting(false)
     if (!resultado.ok) {
       setErrors(resultado.errors)
-      setFormError('Revisa los campos marcados en rojo.')
+      setFormError(resultado.errors.general ?? 'Revisa los campos marcados en rojo.')
       return
     }
     notify('¡Cuenta creada! Ahora puedes iniciar sesión.')

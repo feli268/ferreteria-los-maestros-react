@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import StoreLayout from '../components/templates/StoreLayout'
 import Footer from '../components/organisms/Footer'
+import DataGateContainer from './DataGateContainer'
 import HeaderContainer from './HeaderContainer'
 
 export default function StoreLayoutContainer() {
@@ -15,7 +16,9 @@ export default function StoreLayoutContainer() {
 
   return (
     <StoreLayout header={<HeaderContainer />} footer={<Footer />}>
-      <Outlet />
+      <DataGateContainer>
+        <Outlet />
+      </DataGateContainer>
     </StoreLayout>
   )
 }

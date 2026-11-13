@@ -3,9 +3,11 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AdminFormPage from '../components/pages/AdminFormPage'
 import AdminInventoryReportPage from '../components/pages/AdminInventoryReportPage'
+import AdminProductDetailPage from '../components/pages/AdminProductDetailPage'
 import AdminProductsPage from '../components/pages/AdminProductsPage'
 import NotFoundPage from '../components/pages/NotFoundPage'
 import ProductForm from '../components/organisms/ProductForm'
+import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { useForm } from '../hooks/useForm'
 import { useCategories, useProducts } from '../hooks/useRepository'
@@ -20,6 +22,7 @@ export function AdminProductsContainer({ mode = 'all' }) {
   const products = useProducts()
   const categories = useCategories()
   const { notify } = useToast()
+  const { can } = useAuth()
   const [query, setQuery] = useState('')
   const [pendingDelete, setPendingDelete] = useState(null)
 
@@ -36,14 +39,15 @@ export function AdminProductsContainer({ mode = 'all' }) {
       }
       products={visibles}
       categories={categories}
+      canManage={can('products-manage')}
       query={query}
       onQueryChange={setQuery}
       pendingDelete={pendingDelete}
       onAskDelete={setPendingDelete}
       onCancelDelete={() => setPendingDelete(null)}
-      onConfirmDelete={() => {
-        productService.remove(pendingDelete.id)
-        notify(`Producto "${pendingDelete.name}" eliminado.`, 'info')
+      onConfirmDelete={async () => {
+        const resultado = await productService.remove(pendingDelete.id)
+        notify(resultado.ok ? `Producto "${pendingDelete.name}" eliminado.` : resultado.message, resultado.ok ? 'info' : 'danger')
         setPendingDelete(null)
       }}
     />
@@ -79,14 +83,14 @@ export function AdminProductFormContainer() {
     return <NotFoundPage title="Producto no encontrado" message="No existe un producto con ese código." />
   }
 
-  const enviar = (evento) => {
+  const enviar = async (evento) => {
     evento.preventDefault()
     setSubmitting(true)
-    const resultado = editing ? productService.update(id, form.values) : productService.create(form.values)
+    const resultado = await (editing ? productService.update(id, form.values) : productService.create(form.values))
     setSubmitting(false)
     if (!resultado.ok) {
       form.setErrors(resultado.errors)
-      form.setFormError('Revisa los campos marcados en rojo.')
+      form.setFormError(resultado.errors.general ?? 'Revisa los campos marcados en rojo.')
       return
     }
     notify(editing ? 'Producto actualizado.' : 'Producto creado.')
@@ -108,6 +112,18 @@ export function AdminProductFormContainer() {
       />
     </AdminFormPage>
   )
+}
+
+/** Detalle de solo lectura: lo ven Administrador y Vendedor. */
+export function AdminProductDetailContainer() {
+  const { id } = useParams()
+  const products = useProducts()
+  const categories = useCategories()
+  const { can } = useAuth()
+  const product = products.find((p) => p.id === id)
+  if (!product) return <NotFoundPage title="Producto no encontrado" message="No existe un producto con ese código." />
+  const categoryName = categories.find((c) => c.id === product.categoryId)?.name ?? '—'
+  return <AdminProductDetailPage product={product} categoryName={categoryName} canManage={can('products-manage')} />
 }
 
 export function AdminInventoryReportContainer() {

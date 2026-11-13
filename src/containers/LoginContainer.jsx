@@ -21,7 +21,7 @@ export default function LoginContainer() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const enviar = (evento) => {
+  const enviar = async (evento) => {
     evento.preventDefault()
     setFormError('')
     const errores = collectErrors({
@@ -33,7 +33,7 @@ export default function LoginContainer() {
       return
     }
     setSubmitting(true)
-    const resultado = login(values.email, values.password)
+    const resultado = await login(values.email, values.password)
     setSubmitting(false)
     if (!resultado.ok) {
       setFormError(resultado.message)
